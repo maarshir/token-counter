@@ -1,0 +1,43 @@
+{
+  "currency": "USD",
+  "unit": "1M tokens",
+  "note": "Цены за миллион токенов. Числа строками, чтобы не терять точность при чтении. checked: когда цена сверена с источником.",
+  "models": {
+    "claude-opus-5-5": {
+      "provider": "anthropic",
+      "input": "4", "output": "20", "cache_write": "5", "cache_read": "0.20",
+      "checked": "2026-09-27",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+    },
+    "claude-sonnet-5": {
+      "provider": "anthropic",
+      "input": "2", "output": "10", "cache_write": "2.50", "cache_read": "0.20",
+      "checked": "2026-09-27",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+    },
+    "claude-sonnet-4-6": {
+      "provider": "anthropic",
+      "input": "3", "output": "15", "cache_write": "3.75", "cache_read": "0.30",
+      "checked": "2026-09-27",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+    },
+    "claude-haiku-4-5": {
+      "provider": "anthropic",
+      "input": "1", "output": "5", "cache_write": "1.25", "cache_read": "0.10",
+      "checked": "2026-09-27",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+    },
+    "openai/gpt-oss-120b": {
+      "provider": "groq",
+      "input": "0.15", "output": "0.60", "cache_write": null, "cache_read": null,
+      "checked": "2026-09-27",
+      "source": "https://console.groq.com/docs/models"
+    },
+    "openai/gpt-oss-20b": {
+      "provider": "groq",
+      "input": "0.075", "output": "0.30", "cache_write": null, "cache_read": null,
+      "checked": "2026-09-27",
+      "source": "https://console.groq.com/docs/models"
+    }
+  }
+}
