@@ -42,3 +42,12 @@ jobs:
         run: |
           python -m token_counter models
           python -m token_counter cost --model claude-sonnet-4-6 --input 1200 --output 300 --times 1000
+
+      - name: Установка как пакета
+        # Ставим из другой папки, чтобы импорт шёл из установленного пакета, а не из исходников:
+        # так видно, что prices.json попал в пакет (без него prompt-arena не посчитает цену)
+        run: |
+          pip install .
+          cd "$RUNNER_TEMP"
+          token-counter models
+          python -c "from token_counter import load_prices; assert load_prices()"
