@@ -29,15 +29,15 @@
     },
     "openai/gpt-oss-120b": {
       "provider": "groq",
-      "input": "0.15", "output": "0.60", "cache_write": null, "cache_read": null,
+      "input": "0.15", "output": "0.60", "cache_write": null, "cache_read": "0.075",
       "checked": "2026-09-27",
-      "source": "https://console.groq.com/docs/models"
+      "source": "https://console.groq.com/docs/model/openai/gpt-oss-120b"
     },
     "openai/gpt-oss-20b": {
       "provider": "groq",
-      "input": "0.075", "output": "0.30", "cache_write": null, "cache_read": null,
+      "input": "0.075", "output": "0.30", "cache_write": null, "cache_read": "0.037",
       "checked": "2026-09-27",
-      "source": "https://console.groq.com/docs/models"
+      "source": "https://console.groq.com/docs/model/openai/gpt-oss-20b"
     }
   }
 }
