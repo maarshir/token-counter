@@ -15,7 +15,7 @@ def row(**over):
 
 def test_builtin_table_loads_and_every_model_has_source_and_date():
     prices = load_prices()
-    assert "claude-sonnet-4-6" in prices  # модель по умолчанию в prompt-arena
+    assert "claude-sonnet-4-6" in prices  # модель по умолчанию в promptdiff
     for p in prices.values():
         assert p.source.startswith("https://")
         assert len(p.checked) == 10
