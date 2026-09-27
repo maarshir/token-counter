@@ -46,6 +46,40 @@ def test_usage_from_api_dict():
     assert u == Usage(12, 5, 0, 40)
 
 
+def test_usage_from_openai_без_кэша():
+    # так отвечает Groq на обычный запрос; лишние поля (total_tokens, время) не мешают
+    u = Usage.from_openai({"prompt_tokens": 120, "completion_tokens": 30, "total_tokens": 150,
+                           "queue_time": 0.01})
+    assert u == Usage(120, 30)
+
+
+def test_usage_from_openai_кэш_вычитается_из_входа():
+    # prompt_tokens уже включает прочитанное из кэша: без вычитания заплатили бы дважды
+    u = Usage.from_openai({"prompt_tokens": 5000, "completion_tokens": 10,
+                           "prompt_tokens_details": {"cached_tokens": 4608}})
+    assert u == Usage(392, 10, 0, 4608)
+
+
+def test_usage_from_openai_пустые_поля():
+    assert Usage.from_openai({"prompt_tokens": 7, "completion_tokens": None,
+                              "prompt_tokens_details": None}) == Usage(7, 0)
+    assert Usage.from_openai({}) == Usage()
+
+
+def test_usage_from_openai_кэш_больше_входа_ошибка():
+    with pytest.raises(ValueError, match="cached_tokens"):
+        Usage.from_openai({"prompt_tokens": 10, "prompt_tokens_details": {"cached_tokens": 11}})
+
+
+def test_groq_кэш_промпта_по_цене_из_таблицы():
+    from token_counter import find_price, load_prices
+    price = find_price("openai/gpt-oss-120b", load_prices())
+    u = Usage.from_openai({"prompt_tokens": 2_000_000, "completion_tokens": 0,
+                           "prompt_tokens_details": {"cached_tokens": 1_000_000}})
+    # миллион обычного входа по 0.15 и миллион из кэша по 0.075
+    assert cost(u, price).total == Decimal("0.225")
+
+
 def test_usage_sum():
     assert Usage(1, 2) + Usage(3, 4, 5, 6) == Usage(4, 6, 5, 6)
 

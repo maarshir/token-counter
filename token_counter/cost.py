@@ -8,7 +8,7 @@ from .prices import MILLION, Price, PriceError
 
 @dataclass(frozen=True)
 class Usage:
-    """Сколько токенов ушло. Поля совпадают с usage в ответе Anthropic API.
+    """Сколько токенов ушло. Поля как в usage у Anthropic API, для OpenAI-формата есть from_openai.
 
     input_tokens у Anthropic не включает токены, записанные в кэш промпта
     и прочитанные из него, они приходят отдельными полями и стоят по-разному.
@@ -40,6 +40,28 @@ class Usage:
             output_tokens=usage.get("output_tokens") or 0,
             cache_write_tokens=usage.get("cache_creation_input_tokens") or 0,
             cache_read_tokens=usage.get("cache_read_input_tokens") or 0,
+        )
+
+    @classmethod
+    def from_openai(cls, usage: dict) -> "Usage":
+        """Из usage в формате OpenAI Chat Completions (так отвечают OpenAI, Groq и другие
+        совместимые API).
+
+        Здесь всё наоборот, чем у Anthropic: prompt_tokens уже включает токены,
+        прочитанные из кэша промпта, а сами они лежат в prompt_tokens_details.cached_tokens.
+        Чтобы не заплатить за них дважды, вычитаем их из обычного входа.
+        Записи в кэш отдельно не бывает. Токены рассуждений у моделей с рассуждением
+        входят в completion_tokens и оплачиваются как выход.
+        """
+        prompt = usage.get("prompt_tokens") or 0
+        details = usage.get("prompt_tokens_details") or {}
+        cached = details.get("cached_tokens") or 0
+        if cached > prompt:
+            raise ValueError(f"cached_tokens ({cached}) больше prompt_tokens ({prompt})")
+        return cls(
+            input_tokens=prompt - cached,
+            output_tokens=usage.get("completion_tokens") or 0,
+            cache_read_tokens=cached,
         )
 
 
