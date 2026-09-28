@@ -26,7 +26,7 @@ def test_punctuation_and_emoji_are_a_token_each():
 
 
 def test_classes_are_counted_separately():
-    e = estimate_tokens("вода water 300!")
+    e = estimate_tokens("фото photo 300!")
     assert (e.cyrillic, e.latin, e.digits, e.other) == (4, 5, 3, 1)
     assert e.approximate is True
 
