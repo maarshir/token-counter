@@ -74,3 +74,17 @@ def test_broken_file_gives_clear_error(tmp_path):
         load_prices(path)
     with pytest.raises(PriceError, match="Нет файла"):
         load_prices(tmp_path / "nope.json")
+
+
+def test_builtin_table_models():
+    prices = load_prices()
+    assert sorted(prices) == sorted([
+        "claude-opus-5-5", "claude-sonnet-5-5", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5",
+        "openai/gpt-oss-120b", "openai/gpt-oss-20b",
+    ])
+    assert sum(p.provider == "anthropic" for p in prices.values()) == 5
+
+
+def test_sonnet_5_5_with_date_is_not_confused_with_sonnet_5():
+    prices = load_prices()
+    assert find_price("claude-sonnet-5-5-20261101", prices).model == "claude-sonnet-5-5"

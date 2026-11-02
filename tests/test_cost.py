@@ -106,3 +106,14 @@ def test_times_rejects_negative():
 ])
 def test_format_usd(amount, text):
     assert format_usd(Decimal(amount)) == text
+
+
+def test_sonnet_5_5_request_cost():
+    from token_counter.prices import load_prices
+    price = load_prices()["claude-sonnet-5-5"]
+    c = cost(Usage(10_000, 2_000, cache_write_tokens=1_000, cache_read_tokens=20_000), price)
+    assert c.input == Decimal("0.02")
+    assert c.output == Decimal("0.02")
+    assert c.cache_write == Decimal("0.0025")
+    assert c.cache_read == Decimal("0.002")
+    assert c.total == Decimal("0.0445")
