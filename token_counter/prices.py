@@ -5,6 +5,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -18,6 +19,9 @@ PRICES_ENV = "TOKEN_COUNTER_PRICES"
 DATE_SUFFIX = re.compile(r"-\d{8}$")
 
 MILLION = Decimal(1_000_000)
+
+# Через сколько дней после сверки цену стоит проверить заново
+STALE_DAYS = 30
 
 
 class PriceError(ValueError):
@@ -104,3 +108,29 @@ def find_price(model: str, prices: dict[str, Price]) -> Price:
         f"Известные: {', '.join(sorted(prices))}. "
         f"Свою таблицу можно указать через --prices или {PRICES_ENV}."
     )
+
+
+def _checked_date(price: Price) -> date | None:
+    try:
+        return date.fromisoformat(price.checked)
+    except (TypeError, ValueError):
+        return None
+
+
+def is_stale(price: Price, today: date, days: int = STALE_DAYS) -> bool:
+    """Цена сверена больше days дней назад или дата сверки неизвестна. days=0 выключает проверку."""
+    if days <= 0:
+        return False
+    checked = _checked_date(price)
+    return checked is None or (today - checked).days > days
+
+
+def stale_warning(price: Price, today: date, days: int = STALE_DAYS) -> str | None:
+    """Строка предупреждения для устаревшей цены или None, если цена свежая."""
+    if not is_stale(price, today, days):
+        return None
+    checked = _checked_date(price)
+    if checked is None:
+        return f"Цена {price.model} без даты сверки: проверьте по {price.source}"
+    return (f"Цена {price.model} сверена {checked:%d.%m.%Y}, больше {days} дней назад: "
+            f"проверьте по {price.source}")

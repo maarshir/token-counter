@@ -2,12 +2,32 @@
 
 import argparse
 import sys
+from datetime import date
 from pathlib import Path
 
 from .anthropic_count import CountError, count_tokens
 from .cost import Usage, cost, format_usd
 from .estimate import estimate_tokens
-from .prices import PriceError, find_price, load_prices
+from .prices import STALE_DAYS, PriceError, find_price, is_stale, load_prices, stale_warning
+
+
+def _today() -> date:
+    # отдельной функцией, чтобы в тестах подменить «сегодня»
+    return date.today()
+
+
+def _warn_if_stale(price, args) -> None:
+    # в stderr, чтобы вывод в stdout можно было разбирать скриптом как раньше
+    warning = stale_warning(price, _today(), args.stale_days)
+    if warning:
+        print(warning, file=sys.stderr)
+
+
+def _non_negative(value: str) -> int:
+    number = int(value)
+    if number < 0:
+        raise argparse.ArgumentTypeError("нужно число дней от 0")
+    return number
 
 
 def _read_text(args) -> str:
@@ -22,12 +42,14 @@ def _read_text(args) -> str:
 
 def cmd_models(args, out) -> int:
     prices = load_prices(args.prices)
+    today = _today()
     print("Цены в долларах за миллион токенов", file=out)
     print(f"{'модель':<22} {'поставщик':<10} {'вход':>7} {'выход':>7} {'кэш-запись':>11} {'кэш-чтение':>11}  сверено", file=out)
     for p in sorted(prices.values(), key=lambda p: (p.provider, p.model)):
         cw = str(p.cache_write) if p.cache_write is not None else "-"
         cr = str(p.cache_read) if p.cache_read is not None else "-"
-        print(f"{p.model:<22} {p.provider:<10} {p.input!s:>7} {p.output!s:>7} {cw:>11} {cr:>11}  {p.checked}", file=out)
+        mark = "  давно, сверьте" if is_stale(p, today, args.stale_days) else ""
+        print(f"{p.model:<22} {p.provider:<10} {p.input!s:>7} {p.output!s:>7} {cw:>11} {cr:>11}  {p.checked}{mark}", file=out)
     sources = sorted({p.source for p in prices.values()})
     print("\nИсточники: " + ", ".join(sources), file=out)
     return 0
@@ -46,6 +68,7 @@ def _print_cost(c, n: int, out) -> None:
 def cmd_cost(args, out) -> int:
     price = find_price(args.model, load_prices(args.prices))
     usage = Usage(args.input, args.output, args.cache_write, args.cache_read)
+    _warn_if_stale(price, args)
     print(f"Модель: {price.model} (цены на {price.checked})", file=out)
     _print_cost(cost(usage, price), args.times, out)
     return 0
@@ -54,6 +77,7 @@ def cmd_cost(args, out) -> int:
 def cmd_estimate(args, out) -> int:
     price = find_price(args.model, load_prices(args.prices))
     text = _read_text(args)
+    _warn_if_stale(price, args)
 
     if args.exact:
         if price.provider != "anthropic":
@@ -72,11 +96,15 @@ def cmd_estimate(args, out) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="token_counter", description="Подсчёт токенов и стоимости запросов к моделям")
     parser.add_argument("--prices", help="свой файл цен в формате prices.json (или переменная TOKEN_COUNTER_PRICES)")
+    # --stale-days у каждой команды, чтобы его можно было писать после её имени
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--stale-days", type=_non_negative, default=STALE_DAYS, metavar="N",
+                        help=f"предупреждать, если цена сверена больше N дней назад (по умолчанию {STALE_DAYS}, 0 выключает)")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("models", help="таблица цен")
+    sub.add_parser("models", help="таблица цен", parents=[common])
 
-    p = sub.add_parser("cost", help="стоимость по известному числу токенов")
+    p = sub.add_parser("cost", help="стоимость по известному числу токенов", parents=[common])
     p.add_argument("--model", required=True)
     p.add_argument("--input", type=int, default=0, help="входные токены")
     p.add_argument("--output", type=int, default=0, help="выходные токены")
@@ -84,7 +112,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cache-read", type=int, default=0, help="токены, прочитанные из кэша промпта")
     p.add_argument("--times", type=int, default=1, help="сколько таких запросов")
 
-    p = sub.add_parser("estimate", help="прикинуть токены и стоимость по тексту")
+    p = sub.add_parser("estimate", help="прикинуть токены и стоимость по тексту", parents=[common])
     p.add_argument("--model", required=True)
     src = p.add_mutually_exclusive_group()
     src.add_argument("--text")
