@@ -8,7 +8,7 @@ from pathlib import Path
 from .anthropic_count import CountError, count_tokens
 from .cost import Usage, cost, format_usd
 from .estimate import estimate_tokens
-from .prices import STALE_DAYS, PriceError, find_price, is_stale, load_prices, stale_warning
+from .prices import STALE_DAYS, PriceError, find_price, is_stale, load_prices, price_for_prompt, stale_warning
 
 
 def _today() -> date:
@@ -50,9 +50,24 @@ def cmd_models(args, out) -> int:
         cr = str(p.cache_read) if p.cache_read is not None else "-"
         mark = "  давно, сверьте" if is_stale(p, today, args.stale_days) else ""
         print(f"{p.model:<22} {p.provider:<10} {p.input!s:>7} {p.output!s:>7} {cw:>11} {cr:>11}  {p.checked}{mark}", file=out)
+        long = p.long_prompt
+        if long is not None:
+            lcw = str(long.cache_write) if long.cache_write is not None else "-"
+            lcr = str(long.cache_read) if long.cache_read is not None else "-"
+            label = f"  промпт > {long.threshold:,}".replace(",", " ")
+            print(f"{label:<22} {'':<10} {long.input!s:>7} {long.output!s:>7} {lcw:>11} {lcr:>11}", file=out)
     sources = sorted({p.source for p in prices.values()})
     print("\nИсточники: " + ", ".join(sources), file=out)
     return 0
+
+
+def _print_header(price, usage, extra: str, out) -> None:
+    line = f"Модель: {price.model} (цены на {price.checked}){extra}"
+    long = price.long_prompt
+    if long is not None and price_for_prompt(price, usage.prompt_tokens) is not price:
+        print(line, file=out)
+        line = f"Промпт длиннее {long.threshold:,} токенов: весь запрос по повышенной цене".replace(",", " ")
+    print(line, file=out)
 
 
 def _print_cost(c, n: int, out) -> None:
@@ -69,7 +84,7 @@ def cmd_cost(args, out) -> int:
     price = find_price(args.model, load_prices(args.prices))
     usage = Usage(args.input, args.output, args.cache_write, args.cache_read)
     _warn_if_stale(price, args)
-    print(f"Модель: {price.model} (цены на {price.checked})", file=out)
+    _print_header(price, usage, "", out)
     _print_cost(cost(usage, price), args.times, out)
     return 0
 
@@ -88,8 +103,9 @@ def cmd_estimate(args, out) -> int:
         tokens = estimate_tokens(text).tokens
         print(f"Входных токенов: ≈{tokens} (грубая оценка без токенизатора, с запасом)", file=out)
 
-    print(f"Модель: {price.model} (цены на {price.checked}), ответ до {args.output} токенов", file=out)
-    _print_cost(cost(Usage(tokens, args.output), price), args.times, out)
+    usage = Usage(tokens, args.output)
+    _print_header(price, usage, f", ответ до {args.output} токенов", out)
+    _print_cost(cost(usage, price), args.times, out)
     return 0
 
 

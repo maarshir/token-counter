@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
-from .prices import MILLION, Price, PriceError
+from .prices import MILLION, Price, PriceError, price_for_prompt
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,11 @@ class Usage:
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise ValueError(f"{name} должно быть целым числом не меньше нуля, а не {value!r}")
+
+    @property
+    def prompt_tokens(self) -> int:
+        """Длина промпта: вход вместе с записью в кэш и чтением из него."""
+        return self.input_tokens + self.cache_write_tokens + self.cache_read_tokens
 
     def __add__(self, other: "Usage") -> "Usage":
         return Usage(
@@ -94,7 +99,12 @@ def _part(tokens: int, price_per_million: Decimal | None, model: str, what: str)
 
 
 def cost(usage: Usage, price: Price) -> Cost:
-    """Считает стоимость без округления. Округляем только при выводе."""
+    """Считает стоимость без округления. Округляем только при выводе.
+
+    Если у модели цена зависит от длины промпта, она выбирается здесь,
+    по этому же пути идут и cost, и estimate в командной строке.
+    """
+    price = price_for_prompt(price, usage.prompt_tokens)
     return Cost(
         model=price.model,
         input=_part(usage.input_tokens, price.input, price.model, "входа"),

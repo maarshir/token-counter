@@ -79,10 +79,10 @@ def test_broken_file_gives_clear_error(tmp_path):
 def test_builtin_table_models():
     prices = load_prices()
     assert sorted(prices) == sorted([
-        "claude-opus-5-5", "claude-sonnet-5-5", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5",
-        "openai/gpt-oss-120b", "openai/gpt-oss-20b",
+        "claude-opus-5-5", "claude-sonnet-5-5", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-5-5",
+        "claude-haiku-4-5", "openai/gpt-oss-120b", "openai/gpt-oss-20b",
     ])
-    assert sum(p.provider == "anthropic" for p in prices.values()) == 5
+    assert sum(p.provider == "anthropic" for p in prices.values()) == 6
 
 
 def test_sonnet_5_5_with_date_is_not_confused_with_sonnet_5():

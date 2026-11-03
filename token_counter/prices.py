@@ -4,7 +4,7 @@ import difflib
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -29,6 +29,16 @@ class PriceError(ValueError):
 
 
 @dataclass(frozen=True)
+class LongPrompt:
+    """Цены для длинного промпта: у части моделей весь запрос дороже, если промпт длиннее порога."""
+    threshold: int          # до этого числа токенов промпта включительно действует обычная цена
+    input: Decimal
+    output: Decimal
+    cache_write: Decimal | None
+    cache_read: Decimal | None
+
+
+@dataclass(frozen=True)
 class Price:
     model: str
     provider: str
@@ -38,6 +48,7 @@ class Price:
     cache_read: Decimal | None   # чтение из кэша промпта
     checked: str            # дата сверки с источником
     source: str             # откуда взята цена
+    long_prompt: LongPrompt | None = None  # цены выше порога длины промпта, если они есть
 
 
 def _money(value, model: str, field: str, optional: bool = False) -> Decimal | None:
@@ -53,6 +64,23 @@ def _money(value, model: str, field: str, optional: bool = False) -> Decimal | N
     if not number.is_finite() or number < 0:
         raise PriceError(f"{model}: в поле {field} недопустимое значение: {value!r}")
     return number
+
+
+def _long_prompt(value, model: str) -> LongPrompt | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise PriceError(f"{model}: long_prompt должен быть словарём с threshold и ценами")
+    threshold = value.get("threshold")
+    if not isinstance(threshold, int) or isinstance(threshold, bool) or threshold <= 0:
+        raise PriceError(f"{model}: long_prompt.threshold должен быть целым числом больше нуля")
+    return LongPrompt(
+        threshold=threshold,
+        input=_money(value.get("input"), model, "long_prompt.input"),
+        output=_money(value.get("output"), model, "long_prompt.output"),
+        cache_write=_money(value.get("cache_write"), model, "long_prompt.cache_write", optional=True),
+        cache_read=_money(value.get("cache_read"), model, "long_prompt.cache_read", optional=True),
+    )
 
 
 def parse_prices(data: dict) -> dict[str, Price]:
@@ -77,6 +105,7 @@ def parse_prices(data: dict) -> dict[str, Price]:
             cache_read=_money(row.get("cache_read"), name, "cache_read", optional=True),
             checked=row["checked"],
             source=row["source"],
+            long_prompt=_long_prompt(row.get("long_prompt"), name),
         )
     return prices
 
@@ -108,6 +137,20 @@ def find_price(model: str, prices: dict[str, Price]) -> Price:
         f"Известные: {', '.join(sorted(prices))}. "
         f"Свою таблицу можно указать через --prices или {PRICES_ENV}."
     )
+
+
+def price_for_prompt(price: Price, prompt_tokens: int) -> Price:
+    """Цена, по которой считается весь запрос с промптом такой длины.
+
+    Длина промпта по правилу Anthropic: все входные токены вместе с записью
+    в кэш и чтением из него, выходные не считаются. Ровно на пороге ещё
+    обычная цена, выше порога весь запрос, включая ответ, идёт по второй.
+    """
+    long = price.long_prompt
+    if long is None or prompt_tokens <= long.threshold:
+        return price
+    return replace(price, input=long.input, output=long.output,
+                   cache_write=long.cache_write, cache_read=long.cache_read, long_prompt=None)
 
 
 def _checked_date(price: Price) -> date | None:
